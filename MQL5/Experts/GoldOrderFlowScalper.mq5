@@ -115,6 +115,14 @@ int OnInit()
    if(InpShowPanel)
       CreatePanel();
 
+   // Symbol diagnostics - helps size SL/TP correctly for this gold contract.
+   MqlTick dtk; SymbolInfoTick(_Symbol, dtk);
+   PrintFormat("Symbol specs: digits=%d point=%g stopsLevel=%d freezeLevel=%d spread=%.0f pts",
+               (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS), _Point,
+               (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL),
+               (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL),
+               (dtk.ask - dtk.bid) / _Point);
+
    PrintFormat("GoldOrderFlowScalper started on %s | mode=%s | trading=%s",
                _Symbol,
                (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO ? "DEMO":"LIVE",
@@ -294,11 +302,28 @@ bool ExecuteMarket(const int signal, const string tag)
    double point = _Point;
    double sl, tp, price;
 
+   // Respect the broker's minimum stop distance. Gold "points" are small
+   // (2-digit XAUUSDm -> 1 pt = $0.01), so a tight SL can fall inside the
+   // broker's stops/freeze level and get rejected as "invalid stops".
+   long  stopsLvl  = (long)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
+   long  freezeLvl = (long)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL);
+   long  minLvl    = (stopsLvl > freezeLvl ? stopsLvl : freezeLvl);
+   long  spreadPts = (long)MathRound((tk.ask - tk.bid) / point);
+   // SL sits across the spread from entry, so it must clear minLvl + spread.
+   long  slBuffer  = minLvl + spreadPts + 10;
+   long  tpBuffer  = minLvl + 10;
+   long  slPts     = (InpStopLossPoints   > 0) ? (long)MathMax(InpStopLossPoints,   slBuffer) : 0;
+   long  tpPts     = (InpTakeProfitPoints > 0) ? (long)MathMax(InpTakeProfitPoints, tpBuffer) : 0;
+
+   if(slPts != InpStopLossPoints || tpPts != InpTakeProfitPoints)
+      PrintFormat("Stops adjusted to broker minimum (stopsLevel=%d): SL %d->%d, TP %d->%d pts",
+                  stopsLvl, InpStopLossPoints, (int)slPts, InpTakeProfitPoints, (int)tpPts);
+
    if(signal > 0)
    {
-      price = tk.ask;
-      sl = (InpStopLossPoints   > 0) ? price - InpStopLossPoints   * point : 0.0;
-      tp = (InpTakeProfitPoints > 0) ? price + InpTakeProfitPoints * point : 0.0;
+      price = NormalizeDouble(tk.ask, _Digits);
+      sl = (slPts > 0) ? NormalizeDouble(price - slPts * point, _Digits) : 0.0;
+      tp = (tpPts > 0) ? NormalizeDouble(price + tpPts * point, _Digits) : 0.0;
       if(g_trade.Buy(InpLots, _Symbol, price, sl, tp, tag + " long"))
       {
          NotifyTrade("BUY", InpLots, price, sl, tp, true, "");
@@ -309,9 +334,9 @@ bool ExecuteMarket(const int signal, const string tag)
    }
    else if(signal < 0)
    {
-      price = tk.bid;
-      sl = (InpStopLossPoints   > 0) ? price + InpStopLossPoints   * point : 0.0;
-      tp = (InpTakeProfitPoints > 0) ? price - InpTakeProfitPoints * point : 0.0;
+      price = NormalizeDouble(tk.bid, _Digits);
+      sl = (slPts > 0) ? NormalizeDouble(price + slPts * point, _Digits) : 0.0;
+      tp = (tpPts > 0) ? NormalizeDouble(price - tpPts * point, _Digits) : 0.0;
       if(g_trade.Sell(InpLots, _Symbol, price, sl, tp, tag + " short"))
       {
          NotifyTrade("SELL", InpLots, price, sl, tp, true, "");
