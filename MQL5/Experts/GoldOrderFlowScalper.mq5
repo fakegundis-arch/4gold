@@ -52,6 +52,16 @@ input bool   InpShowArrows       = true;    // Draw arrows when a signal fires
 input int    InpPanelX           = 14;      // Panel X (px from left)
 input int    InpPanelY           = 26;      // Panel Y (px from top)
 
+input group "=== Telegram ==="
+input bool   InpUseTelegram      = false;   // Send alerts to Telegram (needs allowed URL, see README)
+input string InpTgToken          = "";      // Bot token from @BotFather
+input string InpTgChatId         = "";      // Chat / channel id (e.g. 123456789 or -100...)
+input string InpTgPrefix         = "[4gold] "; // Prefix on every message
+input bool   InpTgOnStart        = true;    // Notify when EA starts
+input bool   InpTgOnSignal       = true;    // Notify on each new signal
+input bool   InpTgOnTrade        = true;    // Notify on trade open / failure
+input int    InpTgMinIntervalSec = 30;      // Min seconds between signal alerts (anti-spam)
+
 //==================================================================
 //  Globals
 //==================================================================
@@ -70,6 +80,7 @@ double   g_cumDelta   = 0.0;     // cumulative delta since (re)init, in ticks
 double   g_avgSpread  = 0.0;     // EMA of spread (points)
 int      g_lastSignal = 0;       // last emitted signal direction
 bool     g_tradeBlock = false;   // hard block (live account while DemoOnly)
+datetime g_lastTgSignal = 0;     // throttle for Telegram signal alerts
 
 const string PFX = "GOFS_";      // chart-object prefix
 
@@ -104,6 +115,14 @@ int OnInit()
                _Symbol,
                (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO ? "DEMO":"LIVE",
                (InpEnableTrading && !g_tradeBlock) ? "ENABLED":"OFF");
+
+   if(InpTgOnStart)
+   {
+      bool isDemo = (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO;
+      SendTelegram(StringFormat("started on %s (%s)\nTrading: %s",
+                   _Symbol, isDemo ? "DEMO":"LIVE",
+                   (InpEnableTrading && !g_tradeBlock) ? "ENABLED":"OFF"));
+   }
    return(INIT_SUCCEEDED);
 }
 
@@ -150,6 +169,16 @@ void OnTick()
    {
       if(InpShowArrows)
          DrawSignalArrow(signal, mid);
+
+      if(InpTgOnSignal && (TimeCurrent() - g_lastTgSignal) >= InpTgMinIntervalSec)
+      {
+         SendTelegram(StringFormat("%s %s @ %s\nvel %d  delta %+.0f (buy %.0f%%)  mom %+.0f pts  spr %.0f",
+                      signal > 0 ? "LONG" : "SHORT", _Symbol,
+                      DoubleToString(mid, _Digits),
+                      velocity, windowDelta, buyShare * 100.0, momentumPts, spreadPts));
+         g_lastTgSignal = TimeCurrent();
+      }
+
       TryTrade(signal, tk);
       g_lastSignal = signal;
    }
@@ -242,17 +271,39 @@ void TryTrade(const int signal, const MqlTick &tk)
       price = tk.ask;
       sl = (InpStopLossPoints   > 0) ? price - InpStopLossPoints   * point : 0.0;
       tp = (InpTakeProfitPoints > 0) ? price + InpTakeProfitPoints * point : 0.0;
-      if(!g_trade.Buy(InpLots, _Symbol, price, sl, tp, "OF long"))
+      if(g_trade.Buy(InpLots, _Symbol, price, sl, tp, "OF long"))
+         NotifyTrade("BUY", InpLots, price, sl, tp, true, "");
+      else
+      {
          PrintFormat("Buy failed: retcode=%d %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
+         NotifyTrade("BUY", InpLots, price, sl, tp, false, g_trade.ResultRetcodeDescription());
+      }
    }
    else if(signal < 0)
    {
       price = tk.bid;
       sl = (InpStopLossPoints   > 0) ? price + InpStopLossPoints   * point : 0.0;
       tp = (InpTakeProfitPoints > 0) ? price - InpTakeProfitPoints * point : 0.0;
-      if(!g_trade.Sell(InpLots, _Symbol, price, sl, tp, "OF short"))
+      if(g_trade.Sell(InpLots, _Symbol, price, sl, tp, "OF short"))
+         NotifyTrade("SELL", InpLots, price, sl, tp, true, "");
+      else
+      {
          PrintFormat("Sell failed: retcode=%d %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
+         NotifyTrade("SELL", InpLots, price, sl, tp, false, g_trade.ResultRetcodeDescription());
+      }
    }
+}
+
+void NotifyTrade(const string side, const double lots, const double price,
+                 const double sl, const double tp, const bool ok, const string err)
+{
+   if(!InpTgOnTrade) return;
+   if(ok)
+      SendTelegram(StringFormat("%s %.2f %s @ %s  SL %s  TP %s",
+                   side, lots, _Symbol, DoubleToString(price, _Digits),
+                   DoubleToString(sl, _Digits), DoubleToString(tp, _Digits)));
+   else
+      SendTelegram(StringFormat("%s %s FAILED: %s", side, _Symbol, err));
 }
 
 int CountMyPositions()
@@ -359,5 +410,52 @@ void UpdatePanel(const double spreadPts, const int velocity, const double window
    SetLabel("sig", 7, StringFormat("SIGNAL  : %s", sigTxt), sigClr, 10);
 
    ChartRedraw(0);
+}
+
+//==================================================================
+//  Telegram
+//==================================================================
+string UrlEncode(const string s)
+{
+   string out = "";
+   uchar bytes[];
+   int n = StringToCharArray(s, bytes, 0, -1, CP_UTF8);   // n includes trailing 0
+   for(int i = 0; i < n - 1; i++)
+   {
+      uchar c = bytes[i];
+      if((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+         (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
+         out += CharToString(c);
+      else
+         out += StringFormat("%%%02X", c);
+   }
+   return out;
+}
+
+void SendTelegram(const string text)
+{
+   if(!InpUseTelegram) return;
+   if(InpTgToken == "" || InpTgChatId == "")
+   {
+      Print("Telegram: token or chat id is empty - skipping.");
+      return;
+   }
+
+   string url     = "https://api.telegram.org/bot" + InpTgToken + "/sendMessage";
+   string body    = "chat_id=" + InpTgChatId + "&text=" + UrlEncode(InpTgPrefix + text);
+   string headers = "Content-Type: application/x-www-form-urlencoded\r\n";
+
+   char post[], result[];
+   string rheaders;
+   int len = StringToCharArray(body, post, 0, -1, CP_UTF8) - 1;   // drop trailing 0
+   if(len > 0) ArrayResize(post, len);
+
+   ResetLastError();
+   int code = WebRequest("POST", url, headers, 5000, post, result, rheaders);
+   if(code == -1)
+      PrintFormat("Telegram WebRequest failed (err=%d). In MT5: Tools>Options>Expert Advisors, "
+                  "tick 'Allow WebRequest' and add https://api.telegram.org", GetLastError());
+   else if(code != 200)
+      PrintFormat("Telegram HTTP %d: %s", code, CharArrayToString(result));
 }
 //+------------------------------------------------------------------+

@@ -53,11 +53,34 @@ and arrows on the chart when a signal fires.
 > Note: tuning thresholds depends on the symbol's digits/point and your typical Exness gold
 > spread. Defaults are conservative starting points — we'll calibrate them against your demo feed.
 
+## Telegram alerts (optional)
+
+The EA can push a few logs to Telegram: **startup**, **each new signal** (throttled), and
+**trade open / failure**. All off until you set `InpUseTelegram = true`.
+
+Setup:
+
+1. In Telegram, message **@BotFather** → `/newbot` → copy the **bot token**.
+2. Get your **chat id**: message your new bot once, then open
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` in a browser and read `chat.id`.
+   (For a channel use the `-100...` id and add the bot as admin.)
+3. **Allow the URL in MT5** — this is required or `WebRequest` returns -1:
+   **Tools → Options → Expert Advisors** → tick **Allow WebRequest for listed URL** →
+   add `https://api.telegram.org`.
+4. In the EA inputs set:
+   - `InpUseTelegram = true`
+   - `InpTgToken = <your bot token>`
+   - `InpTgChatId = <your chat id>`
+
+Tune `InpTgMinIntervalSec` (default 30s) to control signal-alert spam, and toggle
+`InpTgOnStart` / `InpTgOnSignal` / `InpTgOnTrade` per event type.
+
 ## Status
 
 - [x] Order-flow signal engine (velocity, imbalance, cumulative delta, momentum)
 - [x] On-chart dashboard + signal arrows
 - [x] Demo-only + trading-off safety guards
 - [x] Trade execution with spread / session / max-position filters
+- [x] Telegram alerts (startup / signal / trade)
 - [ ] Calibrate thresholds on live Exness demo feed
 - [ ] Enable trading on demo and evaluate
