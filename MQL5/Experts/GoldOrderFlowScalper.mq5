@@ -45,8 +45,8 @@ input int    InpBlockToHour      = 1;       // Server-time hour to RESUME tradin
 
 input group "=== Position ==="
 input double InpLots             = 0.01;    // Fixed lot size
-input int    InpStopLossPips     = 5;       // Stop loss (pips; gold 1 pip = $0.10)
-input int    InpTakeProfitPips   = 8;       // Take profit (pips; gold 1 pip = $0.10)
+input int    InpStopLossPips     = 30;      // Stop loss (pips; gold 1 pip = $0.10 -> $3.00 @ 0.01 lot)
+input int    InpTakeProfitPips   = 50;      // Take profit (pips; gold 1 pip = $0.10 -> $5.00 @ 0.01 lot)
 input int    InpMaxPositions     = 1;       // Max simultaneous positions from this EA
 input ulong  InpMagic            = 4000777; // Magic number
 

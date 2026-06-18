@@ -64,7 +64,8 @@ you've confirmed it works — otherwise it opens a fresh test trade on every res
 
 > Note: SL/TP are set in **pips**. For gold, 1 pip = **$0.10** of price (= 10 broker points on a
 > 2-digit `XAUUSDm` feed, or 100 points on a 3-digit feed). So `InpStopLossPips = 5` ≈ a $0.50
-> move. The EA auto-widens the stop if it falls inside the broker's minimum stop distance or the
+> move (default SL 30 pips ≈ $3.00 risk, TP 50 pips ≈ $5.00 reward at 0.01 lot). The EA
+> auto-widens the stop if it falls inside the broker's minimum stop distance or the
 > current spread, and logs the pip size at startup (`1pip=...pts`). The order-flow thresholds
 > (`InpMomentumPoints`, `InpMaxSpreadPoints`) remain in raw **points** since they tune the signal,
 > not your risk.
