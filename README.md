@@ -38,6 +38,18 @@ Only after that do we flip `InpEnableTrading = true` (still on demo).
 You should see a dashboard panel top-left with live velocity / delta / spread / signal,
 and arrows on the chart when a signal fires.
 
+## Quick pipeline test
+
+To confirm orders + Telegram actually fire on your demo account, set:
+
+- `InpTestTradeOnStart = true`
+- `InpTestTradeIsBuy = true` (or false for a sell)
+
+When you attach the EA it opens **one** market trade immediately, regardless of
+`InpEnableTrading`, and sends the trade alert to Telegram. It still obeys the
+demo-only guard, so it can never fire on a live account. Turn it **back off** once
+you've confirmed it works — otherwise it opens a fresh test trade on every restart.
+
 ## Key inputs
 
 | Input | Meaning |

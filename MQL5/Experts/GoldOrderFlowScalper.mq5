@@ -27,6 +27,10 @@ input group "=== Safety ==="
 input bool   InpDemoOnly         = true;    // Refuse to TRADE on a LIVE account
 input bool   InpEnableTrading    = false;   // false = visualize/collect only (no orders)
 
+input group "=== Test ==="
+input bool   InpTestTradeOnStart = false;   // Open ONE trade immediately on start (pipeline check)
+input bool   InpTestTradeIsBuy   = true;    // Test trade direction: true=BUY, false=SELL
+
 input group "=== Order Flow ==="
 input int    InpWindowSeconds    = 10;      // Rolling window length (seconds)
 input int    InpVelocityTrigger  = 25;      // Min ticks in window to allow a signal
@@ -122,6 +126,13 @@ int OnInit()
       SendTelegram(StringFormat("started on %s (%s)\nTrading: %s",
                    _Symbol, isDemo ? "DEMO":"LIVE",
                    (InpEnableTrading && !g_tradeBlock) ? "ENABLED":"OFF"));
+   }
+
+   if(InpTestTradeOnStart)
+   {
+      Print("TEST: opening a startup test trade to verify the execution pipeline.");
+      SendTelegram("TEST trade on start -> " + (string)(InpTestTradeIsBuy ? "BUY" : "SELL"));
+      ExecuteMarket(InpTestTradeIsBuy ? 1 : -1, "TEST");
    }
    return(INIT_SUCCEEDED);
 }
@@ -263,6 +274,23 @@ void TryTrade(const int signal, const MqlTick &tk)
    if(InBlockedSession())               return;
    if(CountMyPositions() >= InpMaxPositions) return;
 
+   ExecuteMarket(signal, "OF");
+}
+
+// Places a market order in the given direction. Honors the demo-only guard
+// but NOT the strategy filters, so it can be reused for the startup test trade.
+// Returns true on a successful send.
+bool ExecuteMarket(const int signal, const string tag)
+{
+   if(g_tradeBlock)
+   {
+      Print("ExecuteMarket: trade hard-blocked (live account while DemoOnly) - skipped.");
+      return false;
+   }
+
+   MqlTick tk;
+   if(!SymbolInfoTick(_Symbol, tk)) return false;
+
    double point = _Point;
    double sl, tp, price;
 
@@ -271,27 +299,28 @@ void TryTrade(const int signal, const MqlTick &tk)
       price = tk.ask;
       sl = (InpStopLossPoints   > 0) ? price - InpStopLossPoints   * point : 0.0;
       tp = (InpTakeProfitPoints > 0) ? price + InpTakeProfitPoints * point : 0.0;
-      if(g_trade.Buy(InpLots, _Symbol, price, sl, tp, "OF long"))
-         NotifyTrade("BUY", InpLots, price, sl, tp, true, "");
-      else
+      if(g_trade.Buy(InpLots, _Symbol, price, sl, tp, tag + " long"))
       {
-         PrintFormat("Buy failed: retcode=%d %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
-         NotifyTrade("BUY", InpLots, price, sl, tp, false, g_trade.ResultRetcodeDescription());
+         NotifyTrade("BUY", InpLots, price, sl, tp, true, "");
+         return true;
       }
+      PrintFormat("Buy failed: retcode=%d %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
+      NotifyTrade("BUY", InpLots, price, sl, tp, false, g_trade.ResultRetcodeDescription());
    }
    else if(signal < 0)
    {
       price = tk.bid;
       sl = (InpStopLossPoints   > 0) ? price + InpStopLossPoints   * point : 0.0;
       tp = (InpTakeProfitPoints > 0) ? price - InpTakeProfitPoints * point : 0.0;
-      if(g_trade.Sell(InpLots, _Symbol, price, sl, tp, "OF short"))
-         NotifyTrade("SELL", InpLots, price, sl, tp, true, "");
-      else
+      if(g_trade.Sell(InpLots, _Symbol, price, sl, tp, tag + " short"))
       {
-         PrintFormat("Sell failed: retcode=%d %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
-         NotifyTrade("SELL", InpLots, price, sl, tp, false, g_trade.ResultRetcodeDescription());
+         NotifyTrade("SELL", InpLots, price, sl, tp, true, "");
+         return true;
       }
+      PrintFormat("Sell failed: retcode=%d %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
+      NotifyTrade("SELL", InpLots, price, sl, tp, false, g_trade.ResultRetcodeDescription());
    }
+   return false;
 }
 
 void NotifyTrade(const string side, const double lots, const double price,
