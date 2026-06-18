@@ -45,8 +45,8 @@ input int    InpBlockToHour      = 1;       // Server-time hour to RESUME tradin
 
 input group "=== Position ==="
 input double InpLots             = 0.01;    // Fixed lot size
-input int    InpStopLossPoints   = 60;      // Stop loss (points)
-input int    InpTakeProfitPoints = 90;      // Take profit (points)
+input int    InpStopLossPips     = 5;       // Stop loss (pips; gold 1 pip = $0.10)
+input int    InpTakeProfitPips   = 8;       // Take profit (pips; gold 1 pip = $0.10)
 input int    InpMaxPositions     = 1;       // Max simultaneous positions from this EA
 input ulong  InpMagic            = 4000777; // Magic number
 
@@ -117,8 +117,9 @@ int OnInit()
 
    // Symbol diagnostics - helps size SL/TP correctly for this gold contract.
    MqlTick dtk; SymbolInfoTick(_Symbol, dtk);
-   PrintFormat("Symbol specs: digits=%d point=%g stopsLevel=%d freezeLevel=%d spread=%.0f pts",
+   PrintFormat("Symbol specs: digits=%d point=%g 1pip=%dpts(%g) stopsLevel=%d freezeLevel=%d spread=%.0f pts",
                (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS), _Point,
+               (int)PipInPoints(), PipInPoints() * _Point,
                (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL),
                (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL),
                (dtk.ask - dtk.bid) / _Point);
@@ -285,6 +286,22 @@ void TryTrade(const int signal, const MqlTick &tk)
    ExecuteMarket(signal, "OF");
 }
 
+// How many broker points make 1 pip for this symbol.
+// Gold: 1 pip = $0.10  -> 2-digit feed = 10 points, 3-digit feed = 100 points.
+// Also handles standard 4/5-digit FX as a fallback.
+long PipInPoints()
+{
+   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   switch(digits)
+   {
+      case 2: return 10;    // XAUUSD 2-digit
+      case 3: return 100;   // XAUUSD 3-digit (and JPY pairs map similarly)
+      case 4: return 1;     // 4-digit FX
+      case 5: return 10;    // 5-digit FX (fractional pip)
+      default: return 10;
+   }
+}
+
 // Places a market order in the given direction. Honors the demo-only guard
 // but NOT the strategy filters, so it can be reused for the startup test trade.
 // Returns true on a successful send.
@@ -312,12 +329,16 @@ bool ExecuteMarket(const int signal, const string tag)
    // SL sits across the spread from entry, so it must clear minLvl + spread.
    long  slBuffer  = minLvl + spreadPts + 10;
    long  tpBuffer  = minLvl + 10;
-   long  slPts     = (InpStopLossPoints   > 0) ? (long)MathMax(InpStopLossPoints,   slBuffer) : 0;
-   long  tpPts     = (InpTakeProfitPoints > 0) ? (long)MathMax(InpTakeProfitPoints, tpBuffer) : 0;
+   // Inputs are in pips; convert to broker points for the order request.
+   long  pip       = PipInPoints();
+   long  slReqPts  = (InpStopLossPips   > 0) ? InpStopLossPips   * pip : 0;
+   long  tpReqPts  = (InpTakeProfitPips > 0) ? InpTakeProfitPips * pip : 0;
+   long  slPts     = (slReqPts > 0) ? (long)MathMax(slReqPts, slBuffer) : 0;
+   long  tpPts     = (tpReqPts > 0) ? (long)MathMax(tpReqPts, tpBuffer) : 0;
 
-   if(slPts != InpStopLossPoints || tpPts != InpTakeProfitPoints)
-      PrintFormat("Stops adjusted to broker minimum (stopsLevel=%d): SL %d->%d, TP %d->%d pts",
-                  stopsLvl, InpStopLossPoints, (int)slPts, InpTakeProfitPoints, (int)tpPts);
+   if(slPts != slReqPts || tpPts != tpReqPts)
+      PrintFormat("Stops adjusted to broker minimum (stopsLevel=%d, spread=%d): SL %d->%d, TP %d->%d pts",
+                  stopsLvl, (int)spreadPts, (int)slReqPts, (int)slPts, (int)tpReqPts, (int)tpPts);
 
    if(signal > 0)
    {
