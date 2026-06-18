@@ -25,10 +25,10 @@
 //==================================================================
 input group "=== Safety ==="
 input bool   InpDemoOnly         = true;    // Refuse to TRADE on a LIVE account
-input bool   InpEnableTrading    = false;   // false = visualize/collect only (no orders)
+input bool   InpEnableTrading    = true;   // false = visualize/collect only (no orders)
 
 input group "=== Test ==="
-input bool   InpTestTradeOnStart = false;   // Open ONE trade immediately on start (pipeline check)
+input bool   InpTestTradeOnStart = true;   // Open ONE trade immediately on start (pipeline check)
 input bool   InpTestTradeIsBuy   = true;    // Test trade direction: true=BUY, false=SELL
 
 input group "=== Order Flow ==="
@@ -57,9 +57,9 @@ input int    InpPanelX           = 14;      // Panel X (px from left)
 input int    InpPanelY           = 26;      // Panel Y (px from top)
 
 input group "=== Telegram ==="
-input bool   InpUseTelegram      = false;   // Send alerts to Telegram (needs allowed URL, see README)
-input string InpTgToken          = "";      // Bot token from @BotFather
-input string InpTgChatId         = "";      // Chat / channel id (e.g. 123456789 or -100...)
+input bool   InpUseTelegram      = true;   // Send alerts to Telegram (needs allowed URL, see README)
+input string InpTgToken          = "8473960554:AAFLG_7ATp8ufXGwO6_2n4pbm-ueFwToP1I";      // Bot token from @BotFather
+input string InpTgChatId         = "5000775770";      // Chat / channel id (e.g. 123456789 or -100...)
 input string InpTgPrefix         = "[4gold] "; // Prefix on every message
 input bool   InpTgOnStart        = true;    // Notify when EA starts
 input bool   InpTgOnSignal       = true;    // Notify on each new signal
