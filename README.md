@@ -57,8 +57,8 @@ you've confirmed it works — otherwise it opens a fresh test trade on every res
 | `InpWindowSeconds` | Rolling order-flow window length (seconds) |
 | `InpVelocityTrigger` | Min ticks in window before any signal is allowed |
 | `InpImbalanceTrigger` | Buy/sell share needed for a directional signal (0.5–1.0) |
-| `InpMomentumPoints` | Min price move (points) across the window to confirm |
-| `InpMaxSpreadPoints` | Block trades when spread exceeds this (gold widens on news/rollover) |
+| `InpMomentumPips` | Min price move (pips) across the window to confirm |
+| `InpMaxSpreadPips` | Block trades when spread (pips) exceeds this (gold widens on news/rollover) |
 | `InpUseSessionFilter` / `InpBlockFromHour` / `InpBlockToHour` | Avoid thin rollover hours (server time) |
 | `InpLots`, `InpStopLossPips`, `InpTakeProfitPips` | Position sizing & exits (SL/TP in **pips**, gold 1 pip = $0.10) |
 
@@ -67,8 +67,12 @@ you've confirmed it works — otherwise it opens a fresh test trade on every res
 > move (default SL 30 pips ≈ $3.00 risk, TP 50 pips ≈ $5.00 reward at 0.01 lot). The EA
 > auto-widens the stop if it falls inside the broker's minimum stop distance or the
 > current spread, and logs the pip size at startup (`1pip=...pts`). The order-flow thresholds
-> (`InpMomentumPoints`, `InpMaxSpreadPoints`) remain in raw **points** since they tune the signal,
-> not your risk.
+> (`InpMomentumPips`, `InpMaxSpreadPips`) are also in pips, so they scale correctly across 2- and
+> 3-digit gold feeds.
+
+> **Important:** an Expert Advisor only runs on the **desktop MT5 terminal (or a VPS)** — the
+> phone/mobile app cannot run EAs. For the bot to trade 24/5 it must be attached to an XAUUSDm
+> chart on a desktop/VPS that stays on and connected. The mobile app is for monitoring only.
 
 ## Telegram alerts (optional)
 

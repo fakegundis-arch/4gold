@@ -35,10 +35,10 @@ input group "=== Order Flow ==="
 input int    InpWindowSeconds    = 10;      // Rolling window length (seconds)
 input int    InpVelocityTrigger  = 25;      // Min ticks in window to allow a signal
 input double InpImbalanceTrigger = 0.60;    // Buy(or sell) share needed for direction (0.5-1.0)
-input int    InpMomentumPoints   = 30;      // Min price move (points) over window to confirm
+input int    InpMomentumPips    = 5;       // Min price move (pips) over window to confirm
 
 input group "=== Trade Filters ==="
-input double InpMaxSpreadPoints  = 35;      // Skip trading when spread (points) > this
+input double InpMaxSpreadPips    = 6;       // Skip trading when spread (pips) > this
 input bool   InpUseSessionFilter = true;    // Avoid thin / rollover hours
 input int    InpBlockFromHour    = 22;      // Server-time hour to STOP trading (inclusive)
 input int    InpBlockToHour      = 1;       // Server-time hour to RESUME trading
@@ -192,10 +192,11 @@ void OnTick()
 
       if(InpTgOnSignal && (TimeCurrent() - g_lastTgSignal) >= InpTgMinIntervalSec)
       {
-         SendTelegram(StringFormat("%s %s @ %s\nvel %d  delta %+.0f (buy %.0f%%)  mom %+.0f pts  spr %.0f",
+         SendTelegram(StringFormat("%s %s @ %s\nvel %d  delta %+.0f (buy %.0f%%)  mom %+.1f pip  spr %.1f pip",
                       signal > 0 ? "LONG" : "SHORT", _Symbol,
                       DoubleToString(mid, _Digits),
-                      velocity, windowDelta, buyShare * 100.0, momentumPts, spreadPts));
+                      velocity, windowDelta, buyShare * 100.0,
+                      momentumPts / (double)PipInPoints(), spreadPts / (double)PipInPoints()));
          g_lastTgSignal = TimeCurrent();
       }
 
@@ -266,11 +267,14 @@ void ComputeWindow(int &velocity, int &buys, int &sells, double &oldestPrice)
 int BuildSignal(const int velocity, const double buyShare, const double sellShare,
                 const double momentumPts, const double spreadPts)
 {
-   if(velocity < InpVelocityTrigger)        return 0;   // too quiet
-   if(spreadPts > InpMaxSpreadPoints)       return 0;   // too expensive
+   double maxSpreadPts = InpMaxSpreadPips * (double)PipInPoints();
+   double momTrigPts   = InpMomentumPips  * (double)PipInPoints();
 
-   if(buyShare  >= InpImbalanceTrigger && momentumPts >=  InpMomentumPoints) return  1;
-   if(sellShare >= InpImbalanceTrigger && momentumPts <= -InpMomentumPoints) return -1;
+   if(velocity < InpVelocityTrigger)  return 0;   // too quiet
+   if(spreadPts > maxSpreadPts)       return 0;   // too expensive
+
+   if(buyShare  >= InpImbalanceTrigger && momentumPts >=  momTrigPts) return  1;
+   if(sellShare >= InpImbalanceTrigger && momentumPts <= -momTrigPts) return -1;
    return 0;
 }
 
@@ -471,17 +475,21 @@ void UpdatePanel(const double spreadPts, const int velocity, const double window
    else if(signal < 0) { sigTxt = "SHORT v"; sigClr = clrRed;  }
    else                { sigTxt = "flat";    sigClr = clrSilver; }
 
-   color spreadClr = (spreadPts > InpMaxSpreadPoints) ? clrTomato : clrLightGreen;
-   color velClr    = (velocity >= InpVelocityTrigger)  ? clrLightGreen : clrSilver;
+   double pip       = (double)PipInPoints();
+   double spreadPip = spreadPts / pip;
+   double momPip    = momentumPts / pip;
+
+   color spreadClr = (spreadPip > InpMaxSpreadPips) ? clrTomato : clrLightGreen;
+   color velClr    = (velocity >= InpVelocityTrigger) ? clrLightGreen : clrSilver;
    color deltaClr  = windowDelta > 0 ? clrLightGreen : (windowDelta < 0 ? clrTomato : clrSilver);
 
    SetLabel("t",   0, "4gold  Order-Flow Scalper", clrGold, 10);
    SetLabel("acc", 1, StringFormat("Account : %s   Trade: %s", mode, tradeState), tradeClr);
-   SetLabel("spr", 2, StringFormat("Spread  : %.0f pts (avg %.0f)", spreadPts, g_avgSpread), spreadClr);
-   SetLabel("vel", 3, StringFormat("Velocity: %d ticks / %ds", velocity, InpWindowSeconds), velClr);
+   SetLabel("spr", 2, StringFormat("Spread  : %.1f pip (max %.1f)", spreadPip, InpMaxSpreadPips), spreadClr);
+   SetLabel("vel", 3, StringFormat("Velocity: %d ticks / %ds (min %d)", velocity, InpWindowSeconds, InpVelocityTrigger), velClr);
    SetLabel("dlt", 4, StringFormat("Delta   : %+.0f  (buy %.0f%%)", windowDelta, buyShare * 100.0), deltaClr);
    SetLabel("cum", 5, StringFormat("CumDelta: %+.0f", g_cumDelta), g_cumDelta >= 0 ? clrLightGreen : clrTomato);
-   SetLabel("mom", 6, StringFormat("Momentum: %+.0f pts", momentumPts), momentumPts >= 0 ? clrLightGreen : clrTomato);
+   SetLabel("mom", 6, StringFormat("Momentum: %+.1f pip (min %d)", momPip, InpMomentumPips), momentumPts >= 0 ? clrLightGreen : clrTomato);
    SetLabel("sig", 7, StringFormat("SIGNAL  : %s", sigTxt), sigClr, 10);
 
    ChartRedraw(0);
