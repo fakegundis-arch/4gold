@@ -76,8 +76,14 @@ you've confirmed it works — otherwise it opens a fresh test trade on every res
 
 ## Telegram alerts (optional)
 
-The EA can push a few logs to Telegram: **startup**, **each new signal** (throttled), and
-**trade open / failure**. All off until you set `InpUseTelegram = true`.
+The EA can push a few logs to Telegram: **startup**, **each new signal** (throttled),
+**trade open / failure**, and a **flow-surge alert**. All off until you set `InpUseTelegram = true`.
+
+The **flow-surge alert** (`InpTgOnSurge`) pings you whenever the market gets volatile —
+i.e. tick velocity ≥ `InpSurgeVelocity` **or** window momentum ≥ `InpSurgeMomentumPips` —
+*regardless of whether the bot actually trades*. This is the "the market is moving" heads-up
+(throttled by `InpSurgeMinIntervalSec`), separate from the trade-signal alert which only fires
+when every trade gate passes.
 
 Setup:
 

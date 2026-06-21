@@ -66,6 +66,12 @@ input bool   InpTgOnSignal       = true;    // Notify on each new signal
 input bool   InpTgOnTrade        = true;    // Notify on trade open / failure
 input int    InpTgMinIntervalSec = 30;      // Min seconds between signal alerts (anti-spam)
 
+input group "=== Flow Surge Alert ==="
+input bool   InpTgOnSurge        = true;    // Telegram alert when volatility/flow surges (even if no trade)
+input int    InpSurgeVelocity    = 45;      // Surge if ticks in window >= this
+input double InpSurgeMomentumPips = 8;      // ...or abs momentum (pips) over window >= this
+input int    InpSurgeMinIntervalSec = 60;   // Min seconds between surge alerts (anti-spam)
+
 //==================================================================
 //  Globals
 //==================================================================
@@ -85,6 +91,7 @@ double   g_avgSpread  = 0.0;     // EMA of spread (points)
 int      g_lastSignal = 0;       // last emitted signal direction
 bool     g_tradeBlock = false;   // hard block (live account while DemoOnly)
 datetime g_lastTgSignal = 0;     // throttle for Telegram signal alerts
+datetime g_lastTgSurge  = 0;     // throttle for Telegram flow-surge alerts
 
 const string PFX = "GOFS_";      // chart-object prefix
 
@@ -206,6 +213,18 @@ void OnTick()
    else if(signal == 0)
    {
       g_lastSignal = 0;
+   }
+
+   // --- flow-surge alert (fires on volatility/activity even if no trade) ---
+   double momPip = momentumPts / (double)PipInPoints();
+   bool   surge  = (velocity >= InpSurgeVelocity) || (MathAbs(momPip) >= InpSurgeMomentumPips);
+   if(InpTgOnSurge && surge && (TimeCurrent() - g_lastTgSurge) >= InpSurgeMinIntervalSec)
+   {
+      SendTelegram(StringFormat("FLOW SURGE %s @ %s\nvel %d  mom %+.1f pip  delta %+.0f (buy %.0f%%)  spr %.1f pip",
+                   _Symbol, DoubleToString(mid, _Digits),
+                   velocity, momPip, windowDelta, buyShare * 100.0,
+                   spreadPts / (double)PipInPoints()));
+      g_lastTgSurge = TimeCurrent();
    }
 
    if(InpShowPanel)
