@@ -64,7 +64,9 @@ input string InpTgPrefix         = "[4gold] "; // Prefix on every message
 input bool   InpTgOnStart        = true;    // Notify when EA starts
 input bool   InpTgOnSignal       = true;    // Notify on each new signal
 input bool   InpTgOnTrade        = true;    // Notify on trade open / failure
+input bool   InpTgOnSkip         = true;    // Notify WHY a setup was not traded
 input int    InpTgMinIntervalSec = 30;      // Min seconds between signal alerts (anti-spam)
+input int    InpTgSkipMinIntervalSec = 60;  // Min seconds between skip-reason alerts (anti-spam)
 
 input group "=== Flow Surge Alert ==="
 input bool   InpTgOnSurge        = true;    // Telegram alert when volatility/flow surges (even if no trade)
@@ -92,6 +94,7 @@ int      g_lastSignal = 0;       // last emitted signal direction
 bool     g_tradeBlock = false;   // hard block (live account while DemoOnly)
 datetime g_lastTgSignal = 0;     // throttle for Telegram signal alerts
 datetime g_lastTgSurge  = 0;     // throttle for Telegram flow-surge alerts
+datetime g_lastTgSkip   = 0;     // throttle for Telegram skip-reason alerts
 
 const string PFX = "GOFS_";      // chart-object prefix
 
@@ -191,6 +194,16 @@ void OnTick()
    // --- signal ---
    int signal = BuildSignal(velocity, buyShare, sellShare, momentumPts, spreadPts);
 
+   // Directional intent ignoring the velocity/spread gates - used to explain
+   // why an otherwise-valid setup was skipped at the signal stage.
+   double momPipNow = momentumPts / (double)PipInPoints();
+   double momTrig   = InpMomentumPips;
+   int    rawDir    = 0;
+   if(buyShare  >= InpImbalanceTrigger && momPipNow >=  momTrig) rawDir =  1;
+   if(sellShare >= InpImbalanceTrigger && momPipNow <= -momTrig) rawDir = -1;
+
+   string skipReason = "";
+
    // --- act / draw ---
    if(signal != 0 && signal != g_lastSignal)
    {
@@ -203,16 +216,33 @@ void OnTick()
                       signal > 0 ? "LONG" : "SHORT", _Symbol,
                       DoubleToString(mid, _Digits),
                       velocity, windowDelta, buyShare * 100.0,
-                      momentumPts / (double)PipInPoints(), spreadPts / (double)PipInPoints()));
+                      momPipNow, spreadPts / (double)PipInPoints()));
          g_lastTgSignal = TimeCurrent();
       }
 
-      TryTrade(signal, tk);
+      skipReason = TryTrade(signal, tk);   // "" if a trade was attempted
       g_lastSignal = signal;
    }
    else if(signal == 0)
    {
       g_lastSignal = 0;
+      // A directional setup existed but a signal-stage gate blocked it.
+      if(rawDir != 0)
+      {
+         double spreadPip = spreadPts / (double)PipInPoints();
+         if(velocity < InpVelocityTrigger)
+            skipReason = StringFormat("low velocity %d < %d (thin flow)", velocity, InpVelocityTrigger);
+         else if(spreadPip > InpMaxSpreadPips)
+            skipReason = StringFormat("spread %.1f pip > max %.1f pip", spreadPip, InpMaxSpreadPips);
+      }
+   }
+
+   if(skipReason != "" && InpTgOnSkip && (TimeCurrent() - g_lastTgSkip) >= InpTgSkipMinIntervalSec)
+   {
+      SendTelegram(StringFormat("SKIPPED %s %s @ %s\nreason: %s",
+                   rawDir > 0 ? "LONG" : (rawDir < 0 ? "SHORT" : "setup"), _Symbol,
+                   DoubleToString(mid, _Digits), skipReason));
+      g_lastTgSkip = TimeCurrent();
    }
 
    // --- flow-surge alert (fires on volatility/activity even if no trade) ---
@@ -300,13 +330,19 @@ int BuildSignal(const int velocity, const double buyShare, const double sellShar
 //==================================================================
 //  Trading
 //==================================================================
-void TryTrade(const int signal, const MqlTick &tk)
+// Returns "" if a trade was attempted, otherwise the reason it was skipped.
+string TryTrade(const int signal, const MqlTick &tk)
 {
-   if(!InpEnableTrading || g_tradeBlock) return;
-   if(InBlockedSession())               return;
-   if(CountMyPositions() >= InpMaxPositions) return;
+   if(!InpEnableTrading) return "trading is OFF (InpEnableTrading=false)";
+   if(g_tradeBlock)      return "hard-blocked: live account while InpDemoOnly=true";
+   if(InBlockedSession())
+      return StringFormat("session filter active (block %02d:00-%02d:00 server)",
+                          InpBlockFromHour, InpBlockToHour);
+   if(CountMyPositions() >= InpMaxPositions)
+      return StringFormat("already at max positions (%d)", InpMaxPositions);
 
-   ExecuteMarket(signal, "OF");
+   ExecuteMarket(signal, "OF");   // sends its own success / failure alert
+   return "";
 }
 
 // How many broker points make 1 pip for this symbol.

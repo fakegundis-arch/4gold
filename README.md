@@ -77,7 +77,13 @@ you've confirmed it works — otherwise it opens a fresh test trade on every res
 ## Telegram alerts (optional)
 
 The EA can push a few logs to Telegram: **startup**, **each new signal** (throttled),
-**trade open / failure**, and a **flow-surge alert**. All off until you set `InpUseTelegram = true`.
+**trade open / failure**, a **flow-surge alert**, and a **skip-reason alert**.
+All off until you set `InpUseTelegram = true`.
+
+The **skip-reason alert** (`InpTgOnSkip`) tells you *why* a setup was not traded — e.g.
+`spread 7.2 pip > max 6.0 pip`, `low velocity 18 < 25`, `session filter active`,
+`already at max positions`, or `trading is OFF`. Throttled by `InpTgSkipMinIntervalSec`.
+This is how you see the bot passing on moves and understand the reason, instead of silence.
 
 The **flow-surge alert** (`InpTgOnSurge`) pings you whenever the market gets volatile —
 i.e. tick velocity ≥ `InpSurgeVelocity` **or** window momentum ≥ `InpSurgeMomentumPips` —
