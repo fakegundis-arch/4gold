@@ -38,7 +38,7 @@ input double InpImbalanceTrigger = 0.60;    // Buy(or sell) share needed for dir
 input int    InpMomentumPips    = 5;       // Min price move (pips) over window to confirm
 
 input group "=== Trade Filters ==="
-input double InpMaxSpreadPips    = 6;       // Skip trading when spread (pips) > this
+input double InpMaxSpreadPips    = 5;       // Skip trading when spread (pips) > this (resting ~2.6 pip)
 input bool   InpUseSessionFilter = true;    // Avoid thin / rollover hours
 input int    InpBlockFromHour    = 22;      // Server-time hour to STOP trading (inclusive)
 input int    InpBlockToHour      = 1;       // Server-time hour to RESUME trading
