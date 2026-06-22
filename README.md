@@ -61,6 +61,7 @@ you've confirmed it works — otherwise it opens a fresh test trade on every res
 | `InpMaxSpreadPips` | Block trades when spread (pips) exceeds this (gold widens on news/rollover) |
 | `InpUseSessionFilter` / `InpBlockFromHour` / `InpBlockToHour` | Avoid thin rollover hours (server time) |
 | `InpLots`, `InpStopLossPips`, `InpTakeProfitPips` | Position sizing & exits (SL/TP in **pips**, gold 1 pip = $0.10) |
+| `InpReverseOnSignal` | If a position is open and the opposite signal fires, close it and flip to the new direction |
 
 > Note: SL/TP are set in **pips**. For gold, 1 pip = **$0.10** of price (= 10 broker points on a
 > 2-digit `XAUUSDm` feed, or 100 points on a 3-digit feed). So `InpStopLossPips = 5` ≈ a $0.50

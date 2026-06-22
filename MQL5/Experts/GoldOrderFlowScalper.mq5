@@ -48,6 +48,7 @@ input double InpLots             = 0.01;    // Fixed lot size
 input int    InpStopLossPips     = 30;      // Stop loss (pips; gold 1 pip = $0.10 -> $3.00 @ 0.01 lot)
 input int    InpTakeProfitPips   = 50;      // Take profit (pips; gold 1 pip = $0.10 -> $5.00 @ 0.01 lot)
 input int    InpMaxPositions     = 1;       // Max simultaneous positions from this EA
+input bool   InpReverseOnSignal  = false;   // Close current position & flip on an opposite signal
 input ulong  InpMagic            = 4000777; // Magic number
 
 input group "=== Dashboard ==="
@@ -341,11 +342,64 @@ string TryTrade(const int signal, const MqlTick &tk)
    if(InBlockedSession())
       return StringFormat("session filter active (block %02d:00-%02d:00 server)",
                           InpBlockFromHour, InpBlockToHour);
+
+   int curDir = MyPositionDir();
+   if(curDir != 0)
+   {
+      if(curDir == signal)
+         return "already in a position in the same direction";
+      // Opposite signal vs an open position.
+      if(!InpReverseOnSignal)
+         return "opposite position open (InpReverseOnSignal=false)";
+
+      // Close current, then flip.
+      if(!CloseMyPositions())
+         return "reverse aborted: failed to close current position";
+      if(InpTgOnTrade)
+         SendTelegram(StringFormat("REVERSE %s: closed %s, opening %s",
+                      _Symbol, curDir > 0 ? "LONG" : "SHORT", signal > 0 ? "LONG" : "SHORT"));
+   }
+
    if(CountMyPositions() >= InpMaxPositions)
       return StringFormat("already at max positions (%d)", InpMaxPositions);
 
    ExecuteMarket(signal, "OF");   // sends its own success / failure alert
    return "";
+}
+
+// Direction of my open position on this symbol: +1 long, -1 short, 0 none.
+int MyPositionDir()
+{
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0) continue;
+      if(PositionGetString(POSITION_SYMBOL) == _Symbol &&
+         (ulong)PositionGetInteger(POSITION_MAGIC) == InpMagic)
+         return (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? 1 : -1;
+   }
+   return 0;
+}
+
+// Closes all of this EA's positions on the symbol. Returns true if all closed.
+bool CloseMyPositions()
+{
+   bool ok = true;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0) continue;
+      if(PositionGetString(POSITION_SYMBOL) == _Symbol &&
+         (ulong)PositionGetInteger(POSITION_MAGIC) == InpMagic)
+      {
+         if(!g_trade.PositionClose(ticket))
+         {
+            ok = false;
+            PrintFormat("Close failed ticket=%I64u: %s", ticket, g_trade.ResultRetcodeDescription());
+         }
+      }
+   }
+   return ok;
 }
 
 // How many broker points make 1 pip for this symbol.
