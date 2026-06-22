@@ -142,9 +142,12 @@ int OnInit()
    if(InpTgOnStart)
    {
       bool isDemo = (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO;
-      SendTelegram(StringFormat("started on %s (%s)\nTrading: %s",
+      double specSpreadPip = ((dtk.ask - dtk.bid) / _Point) / (double)PipInPoints();
+      SendTelegram(StringFormat("started on %s (%s)\nTrading: %s\nSpecs: digits=%d  1pip=%dpts  stopsLevel=%dpts  spread=%.1f pip",
                    _Symbol, isDemo ? "DEMO":"LIVE",
-                   (InpEnableTrading && !g_tradeBlock) ? "ENABLED":"OFF"));
+                   (InpEnableTrading && !g_tradeBlock) ? "ENABLED":"OFF",
+                   (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS), (int)PipInPoints(),
+                   (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL), specSpreadPip));
    }
 
    if(InpTestTradeOnStart)
