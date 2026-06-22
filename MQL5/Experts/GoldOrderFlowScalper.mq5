@@ -33,7 +33,7 @@ input bool   InpTestTradeIsBuy   = true;    // Test trade direction: true=BUY, f
 
 input group "=== Order Flow ==="
 input int    InpWindowSeconds    = 10;      // Rolling window length (seconds)
-input int    InpVelocityTrigger  = 50;      // Min ticks in window to allow a signal
+input int    InpVelocityTrigger  = 40;      // Min ticks in window to allow a signal
 input double InpImbalanceTrigger = 0.60;    // Buy(or sell) share needed for direction (0.5-1.0)
 input int    InpMomentumPips    = 5;       // Min price move (pips) over window to confirm
 
@@ -45,8 +45,8 @@ input int    InpBlockToHour      = 1;       // Server-time hour to RESUME tradin
 
 input group "=== Position ==="
 input double InpLots             = 0.01;    // Fixed lot size
-input int    InpStopLossPips     = 300;      // Stop loss (pips; gold 1 pip = $0.10 -> $3.00 @ 0.01 lot)
-input int    InpTakeProfitPips   = 500;      // Take profit (pips; gold 1 pip = $0.10 -> $5.00 @ 0.01 lot)
+input int    InpStopLossPips     = 30;      // Stop loss (pips; gold 1 pip = $0.10 -> $3.00 @ 0.01 lot)
+input int    InpTakeProfitPips   = 90;      // Take profit (pips; gold 1 pip = $0.10 -> $5.00 @ 0.01 lot)
 input int    InpMaxPositions     = 1;       // Max simultaneous positions from this EA
 input bool   InpReverseOnSignal  = true;   // Close current position & flip on an opposite signal
 input ulong  InpMagic            = 4000777; // Magic number
