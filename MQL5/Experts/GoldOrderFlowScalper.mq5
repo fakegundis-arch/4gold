@@ -28,7 +28,7 @@ input bool   InpDemoOnly         = true;    // Refuse to TRADE on a LIVE account
 input bool   InpEnableTrading    = true;   // false = visualize/collect only (no orders)
 
 input group "=== Test ==="
-input bool   InpTestTradeOnStart = true;   // Open ONE trade immediately on start (pipeline check)
+input bool   InpTestTradeOnStart = false;   // Open ONE trade immediately on start (pipeline check)
 input bool   InpTestTradeIsBuy   = true;    // Test trade direction: true=BUY, false=SELL
 
 input group "=== Order Flow ==="
